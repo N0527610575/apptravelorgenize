@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    name: 🚀 Build Standalone Android APK
     runs-on: ubuntu-latest
 
     steps:
@@ -19,17 +20,30 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 🟢 Setup Node.js
+      - name: 🟢 Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: 'npm'
 
       - name: 📦 Install Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
-      - name: ⚙️ Prebuild Android Project
-        run: npx expo prebuild --platform android
+      - name: 📦 Cache Gradle Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-build-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-build-
+
+      - name: ⚙️ Sync Native Android Configuration
+        run: |
+          if [ ! -d "android" ]; then
+            npx expo prebuild --platform android --no-install
+          fi
+          chmod +x android/gradlew
 
       - name: 🔨 Build Standalone Release APK
         run: |
@@ -39,5 +53,9 @@ jobs:
       - name: 📤 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SmartTravelCompanion-APK
-          path: android/app/build/outputs/apk/release/*.apk
+          name: SmartTravelCompanion-Release-APK
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30

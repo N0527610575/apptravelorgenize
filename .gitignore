@@ -1,2 +1,19 @@
 node_modules/
 .expo/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Android build artifacts
+android/app/build/
+android/.gradle/
+android/build/
+
+# iOS build artifacts
+ios/Pods/
+ios/build/
+
+# OS files
+.DS_Store
+.venv/
+.idea/
