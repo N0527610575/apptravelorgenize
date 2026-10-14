@@ -15,9 +15,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
@@ -33,9 +33,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.smarttravel.companion.data.model.DocumentCategory
+import com.smarttravel.companion.data.model.Passenger
 import com.smarttravel.companion.data.model.TravelDocument
 import com.smarttravel.companion.domain.DocumentIngestionService
 import com.smarttravel.companion.domain.IataBcbpParser
+import com.smarttravel.companion.domain.IngestionResult
 import com.smarttravel.companion.ui.theme.AviationBlue
 import com.smarttravel.companion.ui.theme.EmeraldGreen
 
@@ -44,7 +46,8 @@ fun DocumentVaultModal(
     isOpen: Boolean,
     onClose: () -> Unit,
     documents: List<TravelDocument>,
-    onAddDocuments: (List<TravelDocument>) -> Unit = {},
+    passengers: List<Passenger> = emptyList(),
+    onAddResults: (List<IngestionResult>) -> Unit = {},
     onDeleteDoc: (String) -> Unit = {}
 ) {
     if (!isOpen) return
@@ -54,6 +57,7 @@ fun DocumentVaultModal(
     var inspectedDoc by remember { mutableStateOf<TravelDocument?>(null) }
     var isScanning by remember { mutableStateOf(false) }
     var feedbackMessage by remember { mutableStateOf<String?>(null) }
+    var newPassengerMessage by remember { mutableStateOf<String?>(null) }
 
     // Multi-file picker from Android system storage (PDFs, Images, Passports, Tickets)
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -61,12 +65,19 @@ fun DocumentVaultModal(
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
             isScanning = true
-            val newDocs = uris.map { uri ->
-                DocumentIngestionService.ingestFromUri(context, uri)
+            val results = uris.map { uri ->
+                DocumentIngestionService.ingestFromUri(context, uri, existingPassengers = passengers)
             }
-            onAddDocuments(newDocs)
+            onAddResults(results)
             isScanning = false
-            feedbackMessage = "נקלטו ${newDocs.size} מסמכים חדשים לכספת בהצלחה!"
+
+            val newPass = results.mapNotNull { it.newPassenger }.firstOrNull()
+            if (newPass != null) {
+                newPassengerMessage = "נוסע זוהה ונוסף אוטומטית: ${newPass.fullName}"
+            } else {
+                newPassengerMessage = null
+            }
+            feedbackMessage = "נקלטו וסווגו אוטומטית ${results.size} מסמכים (ללא צורך בתיוג ידני)"
         }
     }
 
@@ -100,7 +111,7 @@ fun DocumentVaultModal(
                             color = Color(0xFF1C1C1E)
                         )
                         Text(
-                            text = "מוצפנת בזיכרון המכשיר • ${documents.size} מסמכים",
+                            text = "זיהוי וסיווג אוטונומי • ${documents.size} מסמכים",
                             fontSize = 11.sp,
                             color = EmeraldGreen,
                             fontWeight = FontWeight.Medium
@@ -141,10 +152,10 @@ fun DocumentVaultModal(
                     OutlinedButton(
                         onClick = {
                             isScanning = true
-                            val scanned = DocumentIngestionService.scanInternalStorage(context)
-                            if (scanned.isNotEmpty()) {
-                                onAddDocuments(scanned)
-                                feedbackMessage = "אותרו ${scanned.size} מסמכים בתיקייה"
+                            val scannedResults = DocumentIngestionService.scanInternalStorage(context, existingPassengers = passengers)
+                            if (scannedResults.isNotEmpty()) {
+                                onAddResults(scannedResults)
+                                feedbackMessage = "אותרו ${scannedResults.size} מסמכים בתיקייה"
                             } else {
                                 feedbackMessage = "סריקה הושלמה. לא אותרו מסמכים חדשים"
                             }
@@ -160,6 +171,26 @@ fun DocumentVaultModal(
                     }
                 }
 
+                // New Passenger Auto-Created Banner
+                newPassengerMessage?.let { passMsg ->
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFE3F2FD),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.PersonAdd, contentDescription = null, tint = AviationBlue, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = passMsg, fontSize = 11.sp, color = AviationBlue, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
                 // Feedback message
                 feedbackMessage?.let { msg ->
                     Surface(
@@ -167,7 +198,7 @@ fun DocumentVaultModal(
                         color = Color(0xFFE8F5E9),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 10.dp)
+                            .padding(top = 8.dp)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -258,7 +289,7 @@ fun DocumentVaultModal(
                                 color = Color.Gray
                             )
                             Text(
-                                text = "לחץ על 'בחר מסמכים מהמכשיר' כדי לקלוט כרטיסי טיסה, שוברים או דרכונים",
+                                text = "העלה קובץ והמערכת תזהה ותסווג אותו אוטומטית ללא תיוג ידני",
                                 fontSize = 11.sp,
                                 color = Color.DarkGray,
                                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
@@ -343,7 +374,7 @@ fun DocumentVaultModal(
             title = { Text(doc.title, fontWeight = FontWeight.Bold, fontSize = 16.sp) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "קטגוריה: ${doc.category.name}", fontSize = 12.sp)
+                    Text(text = "קטגוריה (זוהתה אוטומטית): ${doc.category.name}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     Text(text = "קובץ מקומי: ${doc.localFilePath}", fontSize = 12.sp)
                     doc.barcode?.let { bc ->
                         Surface(

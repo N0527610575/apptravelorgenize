@@ -20,6 +20,7 @@ import com.smarttravel.companion.data.database.DocumentEntity
 import com.smarttravel.companion.data.database.VaultCrypto
 import com.smarttravel.companion.data.model.*
 import com.smarttravel.companion.domain.ContextStateMachine
+import com.smarttravel.companion.domain.TripAuditor
 import com.smarttravel.companion.ui.components.*
 import com.smarttravel.companion.ui.theme.AviationBlue
 import com.smarttravel.companion.ui.theme.BackgroundLight
@@ -101,15 +102,16 @@ fun MainCompanionScreen(
     val coroutineScope = rememberCoroutineScope()
     val stateMachine = remember { ContextStateMachine(trip.id) }
 
-    // Dynamic list of documents in the Vault
+    // Dynamic state for documents & passengers
     val documents = remember { mutableStateListOf<TravelDocument>().apply { addAll(trip.documents) } }
+    val passengers = remember { mutableStateListOf<Passenger>().apply { addAll(trip.passengers) } }
 
     var contextState by remember {
         mutableStateOf(
             ContextState(
                 currentPhase = TravelPhase.BOARDING_GATE,
-                activePassengerId = trip.passengers.firstOrNull()?.id ?: "pass_1",
-                highlightedSeat = trip.passengers.firstOrNull()?.currentSeatNumber ?: "27E",
+                activePassengerId = passengers.firstOrNull()?.id ?: "pass_1",
+                highlightedSeat = passengers.firstOrNull()?.currentSeatNumber ?: "27E",
                 isBarcodeHeroVisible = true,
                 toastMessage = "שער העלייה נפתח. נא להכין דרכונים וכרטיסים פתוחים."
             )
@@ -118,8 +120,13 @@ fun MainCompanionScreen(
 
     var isVaultOpen by remember { mutableStateOf(false) }
 
-    val currentPassenger = remember(contextState.activePassengerId, trip.passengers) {
-        trip.passengers.find { it.id == contextState.activePassengerId } ?: trip.passengers.firstOrNull()
+    // Autonomous Trip Readiness Audit (alerts only when an essential document is missing)
+    val auditReport = remember(documents.toList(), passengers.toList()) {
+        TripAuditor.audit(trip, documents.toList(), passengers.toList())
+    }
+
+    val currentPassenger = remember(contextState.activePassengerId, passengers.toList()) {
+        passengers.find { it.id == contextState.activePassengerId } ?: passengers.firstOrNull()
     }
 
     val activeDocument = remember(currentPassenger, documents.toList()) {
@@ -211,6 +218,12 @@ fun MainCompanionScreen(
                 }
             }
 
+            // Autonomous Trip Readiness & Missing Documents Banner
+            TripReadinessBanner(
+                report = auditReport,
+                onOpenVault = { isVaultOpen = true }
+            )
+
             // Live Flight Status
             FlightStatusBanner(flightLeg = trip.flights.firstOrNull())
 
@@ -223,12 +236,12 @@ fun MainCompanionScreen(
                 }
             )
 
-            // Passenger Tab Row
+            // Passenger Tab Row (Dynamically updates when new passengers are auto-extracted from documents)
             PassengerTabBar(
-                passengers = trip.passengers,
+                passengers = passengers.toList(),
                 activePassengerId = contextState.activePassengerId,
                 onPassengerSelected = { passId ->
-                    val selected = trip.passengers.find { it.id == passId }
+                    val selected = passengers.find { it.id == passId }
                     contextState = contextState.copy(
                         activePassengerId = passId,
                         highlightedSeat = selected?.currentSeatNumber
@@ -258,14 +271,22 @@ fun MainCompanionScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // Document Vault Dialog with Live Ingestion and Deletion
+        // Document Vault Dialog with Live Ingestion and Passenger Auto-Creation
         DocumentVaultModal(
             isOpen = isVaultOpen,
             onClose = { isVaultOpen = false },
-            documents = documents,
-            onAddDocuments = { newDocs ->
-                // Add to memory list
+            documents = documents.toList(),
+            passengers = passengers.toList(),
+            onAddResults = { results ->
+                val newDocs = results.map { it.document }
                 documents.addAll(0, newDocs)
+
+                // Auto-create new passengers discovered in documents
+                results.mapNotNull { it.newPassenger }.forEach { newPass ->
+                    if (passengers.none { it.id == newPass.id || it.fullName.equals(newPass.fullName, ignoreCase = true) }) {
+                        passengers.add(newPass)
+                    }
+                }
 
                 // Check for flight documents to auto-update hero card seat / title
                 val flightDoc = newDocs.find { it.category == DocumentCategory.FLIGHT }
@@ -273,11 +294,11 @@ fun MainCompanionScreen(
                     val seat = flightDoc.barcode?.seatNumber ?: contextState.highlightedSeat
                     contextState = contextState.copy(
                         highlightedSeat = seat,
-                        toastMessage = "נקלט בהצלחה: ${flightDoc.title} • מושב: $seat"
+                        toastMessage = "נקלט כרטיס טיסה: ${flightDoc.title} • מושב: $seat"
                     )
                 } else {
                     contextState = contextState.copy(
-                        toastMessage = "נקלטו ${newDocs.size} מסמכים חדשים בכספת המקומית"
+                        toastMessage = "נקלטו ${newDocs.size} מסמכים חדשים וסווגו אוטומטית ללא תיוג ידני"
                     )
                 }
 
