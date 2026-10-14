@@ -10,3 +10,7 @@ captures/
 .cxx
 *.apk
 *.aab
+node_modules
+.expo/
+ios/
+

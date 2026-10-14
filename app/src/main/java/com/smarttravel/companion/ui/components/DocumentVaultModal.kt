@@ -1,5 +1,8 @@
 package com.smarttravel.companion.ui.components
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -8,14 +11,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -24,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.smarttravel.companion.data.model.DocumentCategory
 import com.smarttravel.companion.data.model.TravelDocument
+import com.smarttravel.companion.domain.DocumentIngestionService
 import com.smarttravel.companion.domain.IataBcbpParser
 import com.smarttravel.companion.ui.theme.AviationBlue
 import com.smarttravel.companion.ui.theme.EmeraldGreen
@@ -33,12 +44,31 @@ fun DocumentVaultModal(
     isOpen: Boolean,
     onClose: () -> Unit,
     documents: List<TravelDocument>,
+    onAddDocuments: (List<TravelDocument>) -> Unit = {},
     onDeleteDoc: (String) -> Unit = {}
 ) {
     if (!isOpen) return
 
+    val context = LocalContext.current
     var selectedCategory by remember { mutableStateOf<DocumentCategory?>(null) }
     var inspectedDoc by remember { mutableStateOf<TravelDocument?>(null) }
+    var isScanning by remember { mutableStateOf(false) }
+    var feedbackMessage by remember { mutableStateOf<String?>(null) }
+
+    // Multi-file picker from Android system storage (PDFs, Images, Passports, Tickets)
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            isScanning = true
+            val newDocs = uris.map { uri ->
+                DocumentIngestionService.ingestFromUri(context, uri)
+            }
+            onAddDocuments(newDocs)
+            isScanning = false
+            feedbackMessage = "נקלטו ${newDocs.size} מסמכים חדשים לכספת בהצלחה!"
+        }
+    }
 
     val filtered = remember(selectedCategory, documents) {
         if (selectedCategory == null) documents else documents.filter { it.category == selectedCategory }
@@ -51,7 +81,7 @@ fun DocumentVaultModal(
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.85f),
+                .fillMaxHeight(0.90f),
             shape = RoundedCornerShape(24.dp),
             color = Color.White
         ) {
@@ -79,6 +109,84 @@ fun DocumentVaultModal(
                     IconButton(onClick = onClose) {
                         Icon(Icons.Default.Close, contentDescription = "סגור", tint = Color.Gray)
                     }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Actions: File Ingestion & Storage Scan
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            filePickerLauncher.launch(
+                                arrayOf(
+                                    "application/pdf",
+                                    "image/*",
+                                    "*/*"
+                                )
+                            )
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AviationBlue),
+                        modifier = Modifier.weight(1.3f),
+                        contentPadding = PaddingValues(vertical = 10.dp, horizontal = 12.dp)
+                    ) {
+                        Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("בחר מסמכים מהמכשיר", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            isScanning = true
+                            val scanned = DocumentIngestionService.scanInternalStorage(context)
+                            if (scanned.isNotEmpty()) {
+                                onAddDocuments(scanned)
+                                feedbackMessage = "אותרו ${scanned.size} מסמכים בתיקייה"
+                            } else {
+                                feedbackMessage = "סריקה הושלמה. לא אותרו מסמכים חדשים"
+                            }
+                            isScanning = false
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(0.9f),
+                        contentPadding = PaddingValues(vertical = 10.dp, horizontal = 10.dp)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("סריקת אחסון", fontSize = 12.sp)
+                    }
+                }
+
+                // Feedback message
+                feedbackMessage?.let { msg ->
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFE8F5E9),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = EmeraldGreen, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = msg, fontSize = 11.sp, color = Color(0xFF2E7D32), fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+
+                if (isScanning) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        color = AviationBlue
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -115,69 +223,109 @@ fun DocumentVaultModal(
                         onClick = { selectedCategory = DocumentCategory.INSURANCE },
                         label = { Text("ביטוח", fontSize = 11.sp) }
                     )
+                    FilterChip(
+                        selected = selectedCategory == DocumentCategory.PASSPORT,
+                        onClick = { selectedCategory = DocumentCategory.PASSPORT },
+                        label = { Text("דרכונים", fontSize = 11.sp) }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Documents list
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filtered, key = { it.id }) { doc ->
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = Color(0xFFF9F9FB),
-                            modifier = Modifier.fillMaxWidth()
+                // Documents list / Empty state
+                if (filtered.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Icon(
+                                Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                modifier = Modifier.size(54.dp),
+                                tint = Color.LightGray
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "אין מסמכים בקטגוריה זו",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Gray
+                            )
+                            Text(
+                                text = "לחץ על 'בחר מסמכים מהמכשיר' כדי לקלוט כרטיסי טיסה, שוברים או דרכונים",
+                                fontSize = 11.sp,
+                                color = Color.DarkGray,
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filtered, key = { it.id }) { doc ->
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = Color(0xFFF9F9FB),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = doc.title,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        color = Color(0xFF1C1C1E)
-                                    )
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        modifier = Modifier.padding(top = 2.dp)
-                                    ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = doc.category.name,
-                                            fontSize = 10.sp,
-                                            color = AviationBlue,
-                                            fontWeight = FontWeight.SemiBold
+                                            text = doc.title,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = Color(0xFF1C1C1E)
                                         )
-                                        if (doc.barcode != null) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        ) {
                                             Text(
-                                                text = "• ברקוד ${doc.barcode.format}",
+                                                text = doc.category.name,
                                                 fontSize = 10.sp,
-                                                color = Color.Gray
+                                                color = AviationBlue,
+                                                fontWeight = FontWeight.SemiBold
                                             )
+                                            if (doc.barcode != null) {
+                                                Text(
+                                                    text = "• ברקוד ${doc.barcode.format}",
+                                                    fontSize = 10.sp,
+                                                    color = Color.Gray
+                                                )
+                                            }
                                         }
                                     }
-                                }
 
-                                Row {
-                                    IconButton(onClick = { inspectedDoc = doc }) {
-                                        Icon(
-                                            Icons.Default.Info,
-                                            contentDescription = "פרטים",
-                                            tint = AviationBlue
-                                        )
-                                    }
-                                    IconButton(onClick = { onDeleteDoc(doc.id) }) {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = "מחק",
-                                            tint = Color.LightGray
-                                        )
+                                    Row {
+                                        IconButton(onClick = { inspectedDoc = doc }) {
+                                            Icon(
+                                                Icons.Default.Info,
+                                                contentDescription = "פרטים",
+                                                tint = AviationBlue
+                                            )
+                                        }
+                                        IconButton(onClick = { onDeleteDoc(doc.id) }) {
+                                            Icon(
+                                                Icons.Default.Delete,
+                                                contentDescription = "מחק",
+                                                tint = Color.LightGray
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -201,7 +349,9 @@ fun DocumentVaultModal(
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = Color(0xFFE3F2FD),
-                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text(

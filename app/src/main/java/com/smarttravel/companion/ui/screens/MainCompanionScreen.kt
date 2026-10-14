@@ -11,15 +11,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.smarttravel.companion.data.database.AppDatabase
+import com.smarttravel.companion.data.database.DocumentEntity
+import com.smarttravel.companion.data.database.VaultCrypto
 import com.smarttravel.companion.data.model.*
 import com.smarttravel.companion.domain.ContextStateMachine
 import com.smarttravel.companion.ui.components.*
 import com.smarttravel.companion.ui.theme.AviationBlue
 import com.smarttravel.companion.ui.theme.BackgroundLight
 import com.smarttravel.companion.ui.theme.EmeraldGreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,7 +97,13 @@ fun MainCompanionScreen(
         )
     )
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val stateMachine = remember { ContextStateMachine(trip.id) }
+
+    // Dynamic list of documents in the Vault
+    val documents = remember { mutableStateListOf<TravelDocument>().apply { addAll(trip.documents) } }
+
     var contextState by remember {
         mutableStateOf(
             ContextState(
@@ -110,9 +122,10 @@ fun MainCompanionScreen(
         trip.passengers.find { it.id == contextState.activePassengerId } ?: trip.passengers.firstOrNull()
     }
 
-    val activeDocument = remember(currentPassenger, trip.documents) {
-        trip.documents.find { it.category == DocumentCategory.FLIGHT && it.passengerId == currentPassenger?.id }
-            ?: trip.documents.firstOrNull()
+    val activeDocument = remember(currentPassenger, documents.toList()) {
+        documents.find { it.category == DocumentCategory.FLIGHT && it.passengerId == currentPassenger?.id }
+            ?: documents.find { it.category == DocumentCategory.FLIGHT }
+            ?: documents.firstOrNull()
     }
 
     Scaffold(
@@ -147,7 +160,7 @@ fun MainCompanionScreen(
                             tint = AviationBlue
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("כספת (${trip.documents.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("כספת (${documents.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -245,11 +258,59 @@ fun MainCompanionScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // Document Vault Dialog
+        // Document Vault Dialog with Live Ingestion and Deletion
         DocumentVaultModal(
             isOpen = isVaultOpen,
             onClose = { isVaultOpen = false },
-            documents = trip.documents
+            documents = documents,
+            onAddDocuments = { newDocs ->
+                // Add to memory list
+                documents.addAll(0, newDocs)
+
+                // Check for flight documents to auto-update hero card seat / title
+                val flightDoc = newDocs.find { it.category == DocumentCategory.FLIGHT }
+                if (flightDoc != null) {
+                    val seat = flightDoc.barcode?.seatNumber ?: contextState.highlightedSeat
+                    contextState = contextState.copy(
+                        highlightedSeat = seat,
+                        toastMessage = "נקלט בהצלחה: ${flightDoc.title} • מושב: $seat"
+                    )
+                } else {
+                    contextState = contextState.copy(
+                        toastMessage = "נקלטו ${newDocs.size} מסמכים חדשים בכספת המקומית"
+                    )
+                }
+
+                // Persist asynchronously to Room Database
+                coroutineScope.launch(Dispatchers.IO) {
+                    try {
+                        val db = AppDatabase.getDatabase(context)
+                        newDocs.forEach { doc ->
+                            val payload = "${doc.title}|${doc.localFilePath}|${doc.barcode?.rawData ?: ""}"
+                            db.documentDao().insertDocument(
+                                DocumentEntity(
+                                    id = doc.id,
+                                    tripId = doc.tripId,
+                                    category = doc.category.name,
+                                    encryptedPayload = VaultCrypto.encrypt(payload)
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            },
+            onDeleteDoc = { docId ->
+                documents.removeAll { it.id == docId }
+                coroutineScope.launch(Dispatchers.IO) {
+                    try {
+                        AppDatabase.getDatabase(context).documentDao().deleteDocumentById(docId)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
         )
     }
 }
