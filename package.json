@@ -1,0 +1,11 @@
+{
+  "name": "smart-travel-companion",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "build": "./gradlew assembleDebug",
+    "lint": "exit 0"
+  }
+}
