@@ -1,107 +1,137 @@
-# Smart Travel Companion & Vault — Native Android (Kotlin + Jetpack Compose)
+# Purge Hybrid Layer & Migrate to 100% Pure Native Android (Kotlin + Jetpack Compose)
 
-תוכנית יישום מקיפה להפיכת האפליקציה לפרויקט Native Android טהור ב-Kotlin באמצעות Jetpack Compose, עם התמקדות מלאה במסד נתונים מקומי (Room/SQLite) וחיישני חומרה פיזיים של המכשיר.
+תוכנית פעולה מלאה להסרת כל שרידי ה-Web, React Native ו-Expo מהמאגר, והסבת המאגר לפרויקט Native Android טהור ומודרני (Kotlin DSL, Jetpack Compose, Room SQLite, ו-GitHub Actions CI).
+
+---
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
 > בהתאם לתשובותיך בשלב הבירור:
-> 1. **ארכיטקטורה ו-UI:** Native Android מלא ב-Kotlin עם **Jetpack Compose (Material3)**.
-> 2. **תעדוף ליבה:** שילוב חיישני חומרה פיזיים של המכשיר (`SensorManager` לברומטר ומד תאוצה, `LocationServices` ל-GPS) ומסד נתונים מקומי מוצפן (`Room / SQLite`).
+> 1. **מיקום קבצי הפרויקט:** העברה מלאה של כל קבצי ה-Android לשורש המאגר (`/app`, `/gradle`, `/gradlew`, `settings.gradle.kts`).
+> 2. **פורמט סקריפטי הבנייה:** שימוש ב-**Kotlin DSL (`build.gradle.kts` ו-`settings.gradle.kts`)** התקני והמודרני ביותר.
 
-- **מבנה הפרויקט המיועד:** העברת קבצי ה-Android לשורש הפרויקט (`app/`, `build.gradle.kts`, `settings.gradle.kts`), הסרת מעטפת ה-React/Web, והגדרת פרויקט Android עצמאי הניתן לקימפול והרצה ישירה במכשיר או באמולטור.
-- **אחסון ופרטיות (Offline & Local First):** שימוש ב-Room Database מקומי עם שמירת נתונים מוצפנת בכספת המכשיר, ללא תלות ברשת חיצונית.
+- **סילוק מוחלט של שכבות היברידיות:** מחיקה מלאה של תיקיית `src/` (קוד הווב), `ios/`, `android/react-settings-plugin/`, וכל קבצי ההגדרות של Node/Vite/Expo (`package.json`, `App.tsx`, `index.html`, `vite.config.ts`, `app.json`, `babel.config.js`, `eas.json` וכו').
+- **סביבת CI/CD:** עדכון מלא של `.github/workflows/build-apk.yml` להרצה ישירה של JDK 17 ו-Gradle Wrapper המייצרים `app-debug.apk` להורדה כ-Artifact.
 
 ---
 
-## 1. Overview & Core Concept
+## 1. Overview & Core Architecture
 
-- **מהות האפליקציה:** מלווה נסיעות חכם, מקומי ובלתי מתערב לאנדרואיד. האפליקציה שולפת ומציגה תמיד את המסמך או המידע הרלוונטי בדיוק לשנייה זו (כרטיס עלייה למטוס בבורדינג, מספר מושב ענק בהתיישבות במטוס, והוראות ניווט בנחיתה).
-- **קהל יעד:** נוסעים ומשפחות הטסים לחו"ל ומעוניינים לחסוך לחץ מול עמדות הסריקה והבידוק בטרמינל, ללא תלות בקליטת סלולר או Wi-Fi.
-- **ערך מרכזי:** מעבר מהיר בטאבים ייעודיים בין כרטיסי כל הנוסעים, קריאת חיישני חומרה בזמן אמת (זיהוי המראה לפי לחץ ברומטרי) וכספת מסמכים מוצפנת.
+המאגר יאורגן מחדש כמבנה Android מקורי ונקי:
+
+```text
+/
+├── .github/workflows/build-apk.yml    # CI/CD: מריץ Gradle ומייצר APK
+├── app/                               # מודול האפליקציה הראשי (com.android.application)
+│   ├── build.gradle.kts               # תלויות Compose, Material3, Room, Coroutines
+│   ├── proguard-rules.pro
+│   └── src/main/
+│       ├── AndroidManifest.xml        # הרשאות חומרה: ברומטר, אקסלרומטר, מיקום, אינטרנט
+│       ├── java/com/smarttravel/companion/
+│       │   ├── MainActivity.kt        # ComponentActivity המריץ Compose
+│       │   ├── MainApplication.kt     # Application נקי
+│       │   ├── data/
+│       │   │   ├── model/TripModels.kt
+│       │   │   ├── database/TravelDatabase.kt  # Room SQLite + VaultCrypto
+│       │   │   └── sensors/AndroidHardwareSensors.kt # ברומטר + מד תאוצה
+│       │   ├── domain/
+│       │   │   ├── ContextStateMachine.kt
+│       │   │   └── IataBcbpParser.kt
+│       │   └── ui/
+│       │       ├── theme/Theme.kt
+│       │       ├── components/        # HeroCard, PassengerTabs, Wayfinding, Vault, StatusBanner
+│       │       └── screens/MainCompanionScreen.kt
+│       └── res/                       # משאבי עיצוב, מיתוג ואייקונים
+├── gradle/wrapper/                    # Gradle Wrapper v8.x / 9.x
+├── gradlew & gradlew.bat
+├── gradle.properties                  # הגדרות JVM ו-AndroidX נקיות
+├── settings.gradle.kts                # הגדרת rootProject ו-include(":app")
+├── build.gradle.kts                   # הגדרות Top-level Gradle ו-AGP
+├── debug.keystore                     # חתימת Debug מקומית
+└── README.md                          # תיעוד ארכיטקטורה והרצה
+```
 
 ---
 
 ## 2. User Experience & Visual Design (Jetpack Compose)
 
-### מסכים וזרימות משתמש (User Flows)
-1. **המסך הראשי (Main Companion Hub):**
-   - **Top AppBar:** כותרת הנסיעה ("חופשה ברומא - LY385"), חיווי מצב כספת מוצפנת, וכפתור גישה לכספת המסמכים.
-   - **Context Banner / Toast:** בועת התראות מערכת מעוצבת המתעדכנת לפי שלב המסע (למשל: *"שער העלייה נפתח. נא להכין דרכונים וכרטיסים פתוחים"*).
-   - **Hero Display Card:** כרטיס תצוגה מרכזי:
-     - בשלב בורדינג: ברקוד QR / PDF417 ענק וקריא לסריקה מהירה.
-     - בשלב איתור מושב / טיסה: מספר מושב ענק בגופן 96sp לקריאה בחושך או ממרחק.
-   - **Passenger Tab Row:** סרגל טאבים אופקי למעבר מיידי בין הנוסעים (נחמן, שולמית), עם נקודה ירוקה לנוסע הראשי וציון מספר המושב.
-   - **Wayfinding Card (בנחיתה):** כרטיס ניווט קופץ עם כפתור שיגור ישיר ל-Google Maps למלון או השכרת הרכב.
-
-2. **פאנל סימולטור חיישנים ומצבי מסע (Sensors & Simulator Drawer / Sheet):**
-   - מאפשר לבחון את תגובת האפליקציה לשינויים פיזיים: כפתורי מעבר בין 8 שלבי המסע, הדמיית ירידת לחץ ברומטרי (המראה), שינוי מיקום GPS (כניסה לשדה), וזיהוי תנועה במד תאוצה.
-
-3. **כספת המסמכים המקומית (Document Vault Screen):**
-   - רשימת מסמכים מסווגת לפי קטגוריות (טיסות, מלונות, רכב, ביטוח, דרכון), תצוגת פענוח תקן IATA BCBP, ואפשרות הוספת מסמכים.
-
-### שפת עיצוב וצבעים
-- **Material 3 Theme:** פלטת צבעים מודרנית ונקייה (כחול תעופה עמוק `#1565C0`, כחול בהיר `#E3F2FD`, ירוק הצלחה `#2E7D32`, ורקע אפור בהיר `#F8F9FA`).
-- **טיפוגרפיה:** היררכיה חדה עם ספרות מושב ענקיות מודגשות בגופן מונוספייס, וקריאות מקסימלית בשמש ובתאורת לילה.
+כל התכונות והיכולות המקוריות של האפליקציה נשמרות במלואן בתוך קוד ה-Compose:
+1. **Hero Display Card:**
+   - ברקוד BCBP / QR ענק בשער העלייה למטוס (`BOARDING_GATE`).
+   - מספר מושב ענק (92sp) בתוך תא הנוסעים (`FINDING_SEAT`, `IN_FLIGHT`).
+2. **Passenger Tab Row:**
+   - סרגל טאבים אופקי למעבר מהיר בין כרטיסי הנוסעים (נחמן, שולמית) עם חיווי מושב ונוסע ראשי.
+3. **Wayfinding Modal / Bottom Sheet:**
+   - כפתור ניווט קופץ בנחיתה (`LANDED_AT_DESTINATION`) המשגר Intent ישיר ל-Google Maps.
+4. **Local Encrypted Vault (כספת מסמכים):**
+   - כספת מסווגת לפי קטגוריות (טיסות, מלונות, רכב, ביטוח, דרכון) המוצפנת מקומית ב-SQLite/Room.
+5. **Live Flight Status Banner:**
+   - תצוגת זמני טיסה, שער עלייה (Gate B22) ומסוע כבודה (Belt 8).
+6. **Sensors Simulation Panel:**
+   - פאנל בדיקות מובנה לבחינת תגובות המערכת לחיישנים בזמן אמת.
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
+## 3. Key Product & DevOps Decisions
 
-- **החלטה 1: Native Android ב-Kotlin ו-Compose במקום React Native**
-  - *הגישה שנבחרה:* שכתוב מלא למבנה Android מקורי ונקי.
-  - *נימוק:* ביצועים מקסימליים, גישה ישירה ללא גשרים ל-Android `SensorManager`, צריכת סוללה מינימלית ברקע, וממשק Native איכותי.
-- **החלטה 2: מסד נתונים מקומי מבוסס Room / SQLite עם הצפנה**
-  - *הגישה שנבחרה:* שימוש ב-Room ORM המובנה של אנדרואיד יחד עם אלגוריתם הצפנת הכספת (`enc_v1`) להגנה על מסמכים וכרטיסי עלייה למטוס.
-  - *נימוק:* תאימות 100% לאופליין, אבטחת מידע אישי בטלפון, ושליפה מהירה ללא השהיות.
-- **החלטה 3: שילוב מנהל חיישנים היברידי (Hardware + Simulation)**
-  - *הגישה שנבחרה:* קריאה מחיישני חומרה אמיתיים כשקיימים במכשיר (`Sensor.TYPE_PRESSURE`, `Sensor.TYPE_ACCELEROMETER`), בתוספת מצב סימולציה מובנה לבדיקות ולמכשירים נטולי ברומטר.
-  - *נימוק:* תמיכה מלאה בכל מגוון מכשירי האנדרואיד לצד חוויית בדיקה נוחה.
+- **מחיקת כל קבצי הווב וה-JS:** מחיקה מוחלטת ללא השארת קבצי תצורה כפולים או מבלבלים.
+- **מעבר ל-Kotlin DSL בשורש:** `settings.gradle.kts` ו-`build.gradle.kts` בשורש, ו-`app/build.gradle.kts` במודול האפליקציה.
+- **הסרת AndroidManifest Debug:** מחיקת `android/app/src/debug/AndroidManifest.xml` שהכיל שרידי React Native (`DevSettingsActivity` ו-`SYSTEM_ALERT_WINDOW`).
+- **תהליך CI ב-GitHub Actions:** Workflow מינימליסטי ומהיר שמתקין JDK 17, מריץ `./gradlew assembleDebug`, ושומר את ה-APK שנוצר ב-`app/build/outputs/apk/debug/app-debug.apk`.
 
 ---
 
-## 4. Technical Architecture & Data Strategy
+## 4. Technical Architecture Diagram
 
 ```text
 ┌────────────────────────────────────────────────────────┐
-│                   Jetpack Compose UI                   │
+│             Android Jetpack Compose UI                 │
 │  MainCompanionScreen • HeroDisplayCard • PassengerTabs │
-│     WayfindingSheet  • DocumentVault  • SimulatorSheet │
+│     WayfindingModal  • DocumentVault  • StatusBanner   │
 └───────────────────────────▲────────────────────────────┘
-                            │ StateFlow / UI Events
+                            │ State / Events
 ┌───────────────────────────┴────────────────────────────┐
-│              TravelCompanionViewModel                  │
-│       Manages ContextState, Active Trip & Docs         │
+│                  Application Layer                     │
+│               MainActivity & ViewModel                 │
 └───────▲───────────────────────────────────────▲────────┘
         │                                       │
 ┌───────┴────────────────────────┐     ┌────────┴──────────────┐
-│     ContextStateMachine        │     │  Database & Vault     │
-│  - Evaluates Travel Phases     │     │  - Room Database      │
-│  - Triggers Barcode / Seat UI  │     │  - Encrypted Storage  │
+│     ContextStateMachine        │     │   TravelDatabase      │
+│  - Evaluates Travel Phases     │     │   - Room SQLite       │
+│  - IataBcbpParser              │     │   - VaultCrypto (enc) │
 └───────▲────────────────────────┘     └───────────────────────┘
         │
 ┌───────┴────────────────────────────────────────────────┐
-│                   Sensor Services                      │
-│  - AndroidBarometerService (Sensor.TYPE_PRESSURE)      │
-│  - AndroidMotionService (Sensor.TYPE_ACCELEROMETER)    │
-│  - AndroidLocationService (FusedLocationClient / GPS)  │
+│             Android Hardware Sensors                   │
+│  - SensorManager: Barometer (Sensor.TYPE_PRESSURE)     │
+│  - SensorManager: Motion (Sensor.TYPE_ACCELEROMETER)   │
+│  - LocationManager / GPS Geofencing                    │
 └────────────────────────────────────────────────────────┘
 ```
 
-### מודלי הנתונים (Core Data Models)
-- `Trip`: מזהה, יעד, תאריכי עוגן לטיסה, רשימת טיסות, רשימת נוסעים ומסמכים.
-- `Passenger`: מזהה, שם מלא, שם קצר לטאב, מספר מושב (`27E`), וחיווי נוסע ראשי.
-- `TravelDocument`: כותרת, קטגוריה (טיסה/מלון/רכב/ביטוח/דרכון), נתוני ברקוד (`BarcodePayload`), וטריגרים.
-- `ContextState`: שלב המסע הנוכחי מתוך 8 השלבים, נוסע פעיל, מושב מודגש, האם להציג ברקוד, והודעת טוסט עליונה.
-- `IataBcbpParser`: מפענח שורת כרטיס טיסה סטנדרטית (תקן IATA BCBP) לחילוץ שם הנוסע, PNR, קודי שדות (TLV, FCO), חברת תעופה ומספר מושב.
-
 ---
 
-## שלבי ביצוע מתוכננים לאחר אישור
+## שלבי ביצוע מתוכננים
 
-1. ארגון מבנה הפרויקט לשורש Android תקני (`app/`, `build.gradle.kts`, `settings.gradle.kts`, `debug.keystore`).
-2. הגדרת תלויות Jetpack Compose, Material3, Room Database, Navigation, ו-Coroutines/Flow.
-3. מימוש שכבת הנתונים (Room Database & DAOs עם לוגיקת הצפנת כספת).
-4. מימוש שירותי החיישנים המקומיים (`BarometerService`, `MotionService`, `LocationService`) ומכונת המצבים (`ContextStateMachine`).
-5. בניית רכיבי ה-UI ב-Jetpack Compose (`MainCompanionScreen`, `HeroDisplayCard`, `PassengerTabBar`, `WayfindingModal`, `DocumentVaultScreen`).
-6. אימות וקימפול מלא של האפליקציה באמצעות `compile_applet`.
+1. **שלב 1: מחיקת קבצי Web, React Native ו-iOS:**
+   - מחיקת `src/`, `ios/`, `android/react-settings-plugin/`.
+   - מחיקת `App.tsx`, `index.html`, `index.js`, `vite.config.ts`, `tsconfig.json`, `package.json`, `package-lock.json`, `app.json`, `babel.config.js`, `eas.json`, `metadata.json`, `.env.example`.
+   - מחיקת `rn_edit_text_material.xml` ו-`debug/AndroidManifest.xml`.
+2. **שלב 2: העברת מבנה ה-Android לשורש המאגר:**
+   - העברת `android/app/` אל `/app/`.
+   - העברת `android/gradle/`, `android/gradlew`, `android/gradlew.bat`.
+   - העברת `debug.keystore` לשורש.
+   - מחיקת תיקיית `android/` הריקה.
+3. **שלב 3: כתיבת סקריפטי Kotlin DSL:**
+   - יצירת `settings.gradle.kts` בשורש.
+   - יצירת `build.gradle.kts` בשורש.
+   - יצירת `app/build.gradle.kts` ב-Kotlin DSL עם תלויות Compose, Material3, Room ו-Coroutines.
+   - ניקוי `gradle.properties`.
+4. **שלב 4: השלמת רכיבי ה-Kotlin Compose:**
+   - וידוא קיומם של `FlightStatusBanner.kt` ו-`DocumentVaultModal.kt` ב-Compose כדי שלא ייגרע אף רכיב ממשק.
+   - בדיקת כל הייבואים והאנוטציות ב-`TravelDatabase.kt` ו-`MainActivity.kt`.
+5. **שלב 5: עדכון GitHub Actions Workflow:**
+   - כתיבה מחדש של `.github/workflows/build-apk.yml` ל-Native Android עם JDK 17 ו-Gradle.
+6. **שלב 6: עדכון README.md ואימות סופי:**
+   - עדכון `README.md` בעברית ובאנגלית המסביר את ארכיטקטורת ה-Native Android, הוראות הרצה ב-Android Studio, והוראות בנייה ב-CLI.
