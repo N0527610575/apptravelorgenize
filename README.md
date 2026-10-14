@@ -1,72 +1,86 @@
-# ✈️ Smart Travel Companion & Vault
+# ✈️ Smart Travel Companion & Vault — 100% Pure Native Android
 
-אפליקציית ניהול מסמכים וליווי נסיעות חכמה, מקומית (On-Device) ובלתי מתערבת. 
-האפליקציה פותרת את הלחץ והבלגן בשליפת מסמכים בזמן אמת (כרטיסי טיסה, דרכונים, שוברי מלון ורכב), תוך שימוש בחיישני המכשיר ובמנוע הקשר חכם כדי להציג תמיד את המסמך הנכון ברגע הנכון.
+אפליקציית ניהול מסמכים וליווי נסיעות חכמה, מקומית (On-Device) ובלתי מתערבת, הבנויה בארכיטקטורת **Native Android טהורה ב-Kotlin עם Jetpack Compose**.
+
+האפליקציה פותרת את הלחץ והבלגן בשליפת מסמכים בזמן אמת (כרטיסי טיסה, דרכונים, שוברי מלון ורכב), תוך שימוש בחיישני המכשיר הפיזיים ובמנוע הקשר חכם כדי להציג תמיד את המסמך הנכון ברגע הנכון.
 
 ---
 
 ## 🌟 עקרונות הליבה
 
-1. **פרטיות מקומית תחילה (Local & Offline First):** כל הנתונים, המסמכים והברקודים נשמרים ומעובדים באופן מקומי על גבי המכשיר בבסיס נתונים SQLite מקומי ומוגן.
-2. **אפס חיכוך (Zero-Effort Ingestion):** מנגנוני קליטה חכמים הכוללים בחירת מסמכים מקומית מאובטחת (Expo Document Picker & Vault), סריקת קבצים לפי חלון תאריכי טיסה, וחיבור עתידי למייל.
-3. **עוזר שקט ובלתי מתערב:** האפליקציה מנטרת את שלבי הטיול באמצעות חיישני המכשיר (GPS, ברומטר, מד תאוצה) ומציגה כלי עזר מותאמים בדיוק לרגע הרלוונטי (כגון ברקוד לשער העלייה, ומספר מושב בהתיישבות).
-4. **תמיכה מובנית בריבוי נוסעים:** מעבר מהיר בטאבים ייעודיים בין כרטיסי טיסה של כל בני המשפחה מול עמדת הסריקה בטרמינל.
+1. **פרטיות מקומית תחילה (Local & Offline First):** כל הנתונים, המסמכים והברקודים נשמרים ומעובדים באופן מקומי על גבי המכשיר במסד נתונים **Room SQLite** מוצפן (`VaultCrypto`).
+2. **חיישני חומרה פיזיים של אנדרואיד (Hardware Sensors):** שימוש ישיר ב-`SensorManager`:
+   - **חיישן ברומטר (`Sensor.TYPE_PRESSURE`):** זיהוי צניחת לחץ ברומטרי עקב דיחוס תא נוסעים בזמן המראה.
+   - **מד תאוצה (`Sensor.TYPE_ACCELEROMETER`):** ניתוח וקטור תאוצה תלת-ממדי להבחנה בין הליכה בשרוול לישיבה במטוס.
+   - **מיקום ו-Geofencing:** זיהוי הגעה לשדה התעופה או למלון היעד.
+3. **תמיכה מובנית בריבוי נוסעים:** מעבר מהיר בטאבים ייעודיים בין כרטיסי טיסה של כל בני המשפחה מול עמדת הסריקה בטרמינל.
+4. **מפענח כרטיסי טיסה בינלאומי (IATA BCBP):** חילוץ אוטומטי של שמות נוסעים, קוד PNR, טיסה ומספר מושב מתוך ברקודים.
 
 ---
 
-## 🏗️ ארכיטקטורת המערכת
-
-המערכת בנויה בארכיטקטורת שכבות מודולרית ומסודרת תחת תיקיית `src/`:
+## 🏗️ מבנה הפרויקט (Clean Architecture)
 
 ```text
-src/
-├── core/
-│   ├── types/                  # הגדרות מודלים וטיפוסי נתונים (TypeScript)
-│   ├── constants/              # מילוני מונחים, קבועי מערכת ומילות מפתח
-│   └── database/               # מסד נתונים מקומי מאובטח (SQLite CRUD)
-├── services/
-│   ├── ingestion/              # סריקת קבצים, בחירת מסמכים ושמירה בכספת (Vault)
-│   ├── processing/             # מנועי פענוח ברקודים (תקן IATA BCBP)
-│   ├── sensors/                # קריאת ברומטר, מד תאוצה, GPS ומכונת מצבי מסע
-│   └── external/               # קישורים עמוקים למפות (Google Maps) ו-API טיסות
-└── presentation/
-    ├── state/                  # ניהול מצב גלובלי (TripContext & Provider)
-    ├── components/             # רכיבי UI מודולריים (כרטיס גיבור, טאבים, ניווט)
-    └── screens/                # מסכי האפליקציה הראשיים (MainCompanionScreen)
+/
+├── .github/workflows/build-apk.yml    # CI/CD: קימפול APK אוטומטי ב-GitHub Actions
+├── app/                               # מודול האפליקציה (com.android.application)
+│   ├── build.gradle.kts               # תלויות Compose, Material3, Room, Coroutines
+│   └── src/main/
+│       ├── AndroidManifest.xml        # הרשאות חומרה ומאפייני האפליקציה
+│       ├── java/com/smarttravel/companion/
+│       │   ├── MainActivity.kt        # ComponentActivity המריץ Jetpack Compose
+│       │   ├── MainApplication.kt     # Application נקי
+│       │   ├── data/
+│       │   │   ├── model/TripModels.kt              # מודלי נתונים
+│       │   │   ├── database/TravelDatabase.kt       # Room SQLite + VaultCrypto (הצפנה)
+│       │   │   └── sensors/AndroidHardwareSensors.kt# ברומטר ומד תאוצה
+│       │   ├── domain/
+│       │   │   ├── ContextStateMachine.kt           # מכונת מצבי מסע (8 שלבים)
+│       │   │   └── IataBcbpParser.kt                # מפענח תקן כרטיסי טיסה
+│       │   └── ui/
+│       │       ├── theme/Theme.kt                   # Material 3 Theme
+│       │       ├── components/                      # HeroDisplayCard, PassengerTabBar, Wayfinding, Vault
+│       │       └── screens/MainCompanionScreen.kt   # המסך המרכזי
+│       └── res/                                     # צבעים, מחרוזות, אייקונים
+├── gradle/wrapper/
+├── gradlew & gradlew.bat
+├── gradle.properties
+├── settings.gradle.kts
+└── build.gradle.kts
 ```
 
 ---
 
-## 📊 סטטוס רכיבי המערכת
+## 🚀 הוראות הרצה ובנייה
+
+### פתיחה ב-Android Studio:
+1. פתח את Android Studio.
+2. בחר **Open** ובחר את תיקיית השורש של הפרויקט.
+3. הפרויקט יסונכרן אוטומטית באמצעות Gradle.
+4. הרץ על מכשיר פיזי או על אמולטור.
+
+### קימפול APK דרך שורת הפקודה (CLI):
+```bash
+# מתן הרשאת הרצה ל-Gradle Wrapper
+chmod +x ./gradlew
+
+# בניית Debug APK
+./gradlew assembleDebug
+
+# ה-APK ייווצר בנתיב:
+# app/build/outputs/apk/debug/app-debug.apk
+```
+
+---
+
+## 🧪 רכיבי המערכת הפעילים
 
 | רכיב | סטטוס | פירוט טכנולוגי |
 | :--- | :---: | :--- |
-| **ממשק משתמש (UI & Presentation)** | ✅ פעיל | מסך מרכזי מלא, כרטיס Hero דינמי, טאבים למעבר בין נוסעים, התראות קופצות |
-| **ניהול מצב (Global State)** | ✅ פעיל | `TripContext` עם תמיכה בעדכון נוסע פעיל ומצבי מסע שונים |
-| **מסד נתונים מקומי (Database)** | ✅ פעיל | `DatabaseService` מבוסס `expo-sqlite` עם פעולות CRUD מלאות למסעות ומסמכים |
-| **חיישני מכשיר (Sensors)** | ✅ פעיל | אינטגרציה עם `expo-sensors` (ברומטר ומד תאוצה) ו-`expo-location` (גידור שדה תעופה) |
-| **קליטת מסמכים וכספת (Vault)** | ✅ פעיל | בחירת מסמכים דרך `expo-document-picker` והעתקה מאובטחת ל-`expo-file-system` |
-| **פענוח כרטיסי טיסה (Barcode)** | ✅ פעיל | מפענח `BarcodeDecoder` ייעודי לפי תקן IATA BCBP לחילוץ שמות, טיסה ומושבים |
-| **ניווט חיצוני (Wayfinding)** | ✅ פעיל | Deep Linking ל-Google Maps לפי קואורדינטות או כתובת מלאה |
-| **מנוע OCR מקומי לתמונות** | 🚧 מתוכנן | שילוב מתוכנן של Google ML Kit / On-Device OCR |
-| **סנכרון מייל חי (Gmail OAuth)** | 🚧 מתוכנן | אינטגרציה מול Gmail API בשלב הבא (כרגע מוגדר ממשק ושירות Mock) |
-
----
-
-## 🚀 הפעלת הפרויקט
-
-### דרישות מקדימות:
-* Node.js (גרסה 18 ומעלה)
-* Expo Go במכשיר הנייד או אמולטור (iOS / Android)
-
-### התקנה והרצה:
-```bash
-# התקנת תלויות
-npm install
-
-# בדיקת טיפוסי TypeScript
-npm run ts:check
-
-# הפעלת שרת הפיתוח של Expo
-npm start
-```
+| **ממשק משתמש (UI)** | ✅ פעיל | Jetpack Compose + Material 3, כרטיס Hero דינמי, טאבים לנוסעים, חלון ניווט למפות |
+| **מסד נתונים מקומי** | ✅ פעיל | `Room Database` מוצפן מקומית עם מפתח כספת `enc_v1` |
+| **חיישני מכשיר** | ✅ פעיל | `SensorManager` ישיר עבור `Sensor.TYPE_PRESSURE` ו-`Sensor.TYPE_ACCELEROMETER` |
+| **מכונת מצבי מסע** | ✅ פעיל | `ContextStateMachine` עם 8 שלבי מסע והתאמה אוטומטית של הממשק |
+| **פענוח כרטיסי טיסה** | ✅ פעיל | `IataBcbpParser` לחילוץ שמות נוסעים, קוד PNR, נמלי תעופה ומספרי מושבים |
+| **אינטגרציית ניווט** | ✅ פעיל | Android Intent ישיר ל-Google Maps לפי קואורדינטות וכתובת |
+| **בנייה אוטומטית (CI)** | ✅ פעיל | GitHub Actions workflow המייצר standalone APK בכל push |
