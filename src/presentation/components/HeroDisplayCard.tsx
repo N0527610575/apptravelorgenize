@@ -1,177 +1,133 @@
 /**
  * @file HeroDisplayCard.tsx
  * @description
- * הרכיב המרכזי של האפליקציה - מציג את המידע הקריטי ביותר בכל רגע נתון.
+ * הרכיב המרכזי של האפליקציה (Web) - מציג את המידע הקריטי ביותר בכל רגע נתון.
  * מתאים את עצמו אוטומטית למכונת המצבים: מקפיץ את הברקוד בשערי העלייה למטוס,
  * ומחליף אותו למספר המושב כשהמשתמש בשרוול או במטוס.
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
-
-import QRCode from 'react-native-qrcode-svg';
-
+import { QRCodeSVG } from 'qrcode.react';
 import { ContextState } from '../../core/types/ContextState';
 import { TravelDocument } from '../../core/types/Document';
+import { QrCode, Armchair, ShieldCheck, Plane, Sparkles } from 'lucide-react';
 
 interface HeroDisplayCardProps {
-  context: ContextState;                 // המצב הנוכחי מהחיישנים ומכונת המצבים
-  activeDocument: TravelDocument | null; // המסמך/כרטיס הטיסה הרלוונטי כרגע
+  context: ContextState;
+  activeDocument: TravelDocument | null;
+  onToggleBarcodeView?: () => void;
 }
 
-export const HeroDisplayCard: React.FC<HeroDisplayCardProps> = ({ context, activeDocument }) => {
-
-  // אם אין מסמך פעיל עדיין, נציג מצב ריק/המתנה
+export const HeroDisplayCard: React.FC<HeroDisplayCardProps> = ({
+  context,
+  activeDocument,
+  onToggleBarcodeView
+}) => {
   if (!activeDocument) {
     return (
-      <View style={[styles.cardContainer, styles.idleContainer]}>
-        <Text style={styles.idleText}>אין מסמך פעיל כרגע</Text>
-        <Text style={styles.subText}>המסמכים שלך יקפצו כאן אוטומטית מתי שתצטרך אותם.</Text>
-      </View>
+      <div className="w-full max-w-md mx-auto bg-white rounded-3xl p-8 shadow-sm border border-gray-200/80 text-center flex flex-col items-center justify-center min-h-[300px]">
+        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-4">
+          <Plane className="w-8 h-8" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-700 mb-2">אין מסמך פעיל כרגע</h3>
+        <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
+          המסמכים שלך יקפצו כאן אוטומטית ברגע הנכון לפי חיישני המכשיר ושלבי הטיסה.
+        </p>
+      </div>
     );
   }
 
   const { isBarcodeHeroVisible, highlightedSeat } = context;
 
   return (
-    <View style={styles.cardContainer}>
-
+    <div className="w-full max-w-md mx-auto bg-white rounded-3xl p-6 sm:p-7 shadow-lg shadow-gray-200/60 border border-gray-100 transition-all duration-300">
       {/* כותרת הכרטיס המציגה למי שייך המסמך */}
-      <View style={styles.header}>
-        <Text style={styles.titleText}>{activeDocument.title}</Text>
-      </View>
+      <div className="border-b border-gray-100 pb-4 mb-5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+            {isBarcodeHeroVisible ? <QrCode className="w-4 h-4" /> : <Armchair className="w-4 h-4" />}
+          </span>
+          <h2 className="text-lg font-bold text-gray-900 tracking-tight">
+            {activeDocument.title}
+          </h2>
+        </div>
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 flex items-center gap-1">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          מאובטח Offline
+        </span>
+      </div>
 
-      <View style={styles.contentContainer}>
-        {/* מצב 1: האפליקציה דורשת להציג את הברקוד בגדול (למשל בזמן הבורדינג) */}
+      <div className="flex flex-col items-center justify-center min-h-[280px]">
+        {/* מצב 1: הצגת ברקוד ענק בבורדינג */}
         {isBarcodeHeroVisible && activeDocument.barcode ? (
-          <View style={styles.barcodeSection}>
-            <Text style={styles.instructionText}>הצג לסריקה</Text>
+          <div className="flex flex-col items-center w-full animate-in fade-in zoom-in-95 duration-200">
+            <span className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3 bg-blue-50 px-3 py-1 rounded-full">
+              הצג לסריקה בעמדת השער
+            </span>
 
-            <View style={styles.barcodePlaceholder}>
-              <QRCode
+            <div className="relative p-5 bg-white rounded-2xl border-2 border-dashed border-blue-300 shadow-inner flex items-center justify-center group">
+              <QRCodeSVG
                 value={activeDocument.barcode.rawData || 'SMART-TRAVEL-BOARDING-PASS'}
                 size={220}
-                color="#000000"
-                backgroundColor="#FFFFFF"
+                level="M"
+                includeMargin={true}
               />
-            </View>
-          </View>
-        ) :
+              <div className="absolute inset-0 rounded-2xl ring-4 ring-blue-500/10 pointer-events-none" />
+            </div>
 
-        /* מצב 2: יש מושב מודגש (למשל אחרי הסריקה בשער ובתוך המטוס) */
-        highlightedSeat ? (
-          <View style={styles.seatSection}>
-            <Text style={styles.instructionText}>המושב שלך</Text>
-            <Text style={styles.hugeSeatNumber}>{highlightedSeat}</Text>
-          </View>
-        ) :
-
-        /* מצב 3: חלופת מחדל - מציג מידע כללי או תמונה */
-        (
-          <View style={styles.defaultSection}>
-            <Text style={styles.infoText}>המסמך שמור ומוכן לשימוש.</Text>
-          </View>
+            <div className="mt-4 flex items-center gap-4 text-xs text-gray-500 font-mono">
+              {activeDocument.barcode.flightNumber && (
+                <span className="bg-gray-100 px-2 py-0.5 rounded">
+                  טיסה: <strong>{activeDocument.barcode.flightNumber}</strong>
+                </span>
+              )}
+              {activeDocument.barcode.seatNumber && (
+                <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold">
+                  מושב: {activeDocument.barcode.seatNumber}
+                </span>
+              )}
+              <span className="text-gray-400">תקן IATA BCBP</span>
+            </div>
+          </div>
+        ) : highlightedSeat ? (
+          /* מצב 2: מושב ענק ובולט לתוך המטוס */
+          <div className="flex flex-col items-center text-center animate-in fade-in duration-200">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
+              המושב שלך במטוס
+            </span>
+            <div className="my-2 py-2">
+              <span className="text-8xl sm:text-9xl font-black text-blue-600 tracking-tight font-mono select-none drop-shadow-sm">
+                {highlightedSeat}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-xl mt-1">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>תא עליון מעל השורה • גישה מהירה לשרוול</span>
+            </div>
+          </div>
+        ) : (
+          /* מצב 3: מידע כללי */
+          <div className="flex flex-col items-center text-center text-gray-600 py-6">
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
+              <ShieldCheck className="w-7 h-7" />
+            </div>
+            <p className="text-base font-semibold text-gray-800">המסמך שמור ומוכן לשימוש</p>
+            <p className="text-xs text-gray-400 mt-1">מוצפן מקומית בכספת הנסיעות של המכשיר</p>
+          </div>
         )}
-      </View>
+      </div>
 
-    </View>
+      {/* לחצן החלפה ידני לבדיקה או נוחות */}
+      {onToggleBarcodeView && (
+        <div className="mt-5 pt-3 border-t border-gray-100 flex justify-center">
+          <button
+            onClick={onToggleBarcodeView}
+            className="text-xs text-blue-600 hover:text-blue-800 font-medium py-1 px-3 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+          >
+            {isBarcodeHeroVisible ? '⇄ הצג מספר מושב' : '⇄ הצג ברקוד לסריקה'}
+          </button>
+        </div>
+      )}
+    </div>
   );
 };
-
-// =========================================================================
-// עיצוב הרכיב (Styles) - דגש על קריאות גבוהה, טקסטים ענקיים וניקיון ויזואלי
-// =========================================================================
-
-const { width } = Dimensions.get('window');
-
-const styles = StyleSheet.create({
-  cardContainer: {
-    width: width * 0.9,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    alignSelf: 'center',
-    // יצירת צל עדין מתחת לכרטיס
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-    marginVertical: 20,
-  },
-  idleContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    minHeight: 200,
-  },
-  header: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-    paddingBottom: 10,
-    marginBottom: 20,
-  },
-  titleText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333333',
-    textAlign: 'center',
-  },
-  contentContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 250,
-  },
-  barcodeSection: {
-    alignItems: 'center',
-  },
-  seatSection: {
-    alignItems: 'center',
-  },
-  defaultSection: {
-    alignItems: 'center',
-  },
-  instructionText: {
-    fontSize: 16,
-    color: '#666666',
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  hugeSeatNumber: {
-    fontSize: 90,             // ענק כדי שאפשר יהיה לקרוא גם בחושך או ממרחק
-    fontWeight: '900',
-    color: '#007AFF',         // צבע כחול בולט
-    letterSpacing: 2,
-  },
-  barcodePlaceholder: {
-    width: 250,
-    height: 250,
-    backgroundColor: '#FAFAFA',
-    borderWidth: 2,
-    borderColor: '#DDDDDD',
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 10,
-  },
-  placeholderText: {
-    color: '#CCCCCC',
-    fontSize: 18,
-  },
-  idleText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#999999',
-  },
-  subText: {
-    fontSize: 14,
-    color: '#BBBBBB',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  infoText: {
-    fontSize: 16,
-    color: '#555555',
-  }
-});

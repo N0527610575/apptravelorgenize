@@ -1,0 +1,8 @@
+{
+  "name": "Smart Travel Companion & Vault",
+  "description": "אפליקציית ניהול מסמכים וליווי נסיעות חכמה, מקומית ובלתי מתערבת. מציגה את המסמך הנכון ברגע הנכון בהתאם לחיישני המכשיר ושלבי הטיסה.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

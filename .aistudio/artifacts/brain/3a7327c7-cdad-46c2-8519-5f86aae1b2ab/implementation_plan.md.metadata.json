@@ -1,0 +1,6 @@
+{
+  "summary": "תוכנית עבודה מפורטת להמרת האפליקציה לפרויקט Native Android טהור ב-Kotlin עם Jetpack Compose, כולל מסד נתונים מקומי מוצפן (Room/SQLite), אינטגרציה מלאה עם חיישני המכשיר (ברומטר, מד תאוצה, GPS), מפענח כרטיסי טיסה IATA BCBP, וממשק משתמש Material3 מהיר ואינטואיטיבי.",
+  "updatedAt": "2026-10-14T07:53:11.347150996Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

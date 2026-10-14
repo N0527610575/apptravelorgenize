@@ -1,132 +1,91 @@
 /**
  * @file PassengerTabBar.tsx
  * @description
- * רכיב ניווט מהיר בין נוסעים (Tab Bar).
+ * רכיב ניווט מהיר בין נוסעים (Web Tab Bar).
  * נועד למנוע לחץ בזמן סריקת הכרטיסים בשער העלייה למטוס.
  * הרכיב מציג סרגל אופקי עם השמות הקצרים של כל הנוסעים המקושרים לאותה נסיעה.
  * לחיצה על טאב מעדכנת את הנוסע הפעיל, ומשנה מיידית את הברקוד שמוצג במסך המרכזי.
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Passenger } from '../../core/types/Passenger';
+import { User, UserPlus } from 'lucide-react';
 
 interface PassengerTabBarProps {
-  passengers: Passenger[];              // רשימת כל הנוסעים בנסיעה הזו
-  activePassengerId: string | undefined; // המזהה של הנוסע שכרטיסו מוצג כעת במסך
-  onPassengerSelect: (passengerId: string) => void; // הפעולה שתרוץ בעת לחיצה על טאב
+  passengers: Passenger[];
+  activePassengerId: string | undefined;
+  onPassengerSelect: (passengerId: string) => void;
+  onAddPassenger?: () => void;
 }
 
 export const PassengerTabBar: React.FC<PassengerTabBarProps> = ({
   passengers,
   activePassengerId,
-  onPassengerSelect
+  onPassengerSelect,
+  onAddPassenger,
 }) => {
-
-  // אם יש רק נוסע אחד או שאין נוסעים, אין טעם להציג את סרגל המעבר
-  if (!passengers || passengers.length <= 1) {
+  if (!passengers || passengers.length === 0) {
     return null;
   }
 
   return (
-    <View style={styles.container}>
-      {/*
-        אנו משתמשים ב-ScrollView אופקי כדי לתמוך במצב של משפחות גדולות.
-        showsHorizontalScrollIndicator={false} מעלים את פס הגלילה למראה נקי.
-      */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContainer}
-      >
+    <div className="w-full max-w-md mx-auto my-3">
+      <div className="flex items-center justify-between mb-2 px-1">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+          <User className="w-3.5 h-3.5" />
+          מעבר מהיר בין כרטיסי נוסעים ({passengers.length})
+        </span>
+        {onAddPassenger && (
+          <button
+            onClick={onAddPassenger}
+            className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 hover:underline cursor-pointer"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            הוסף נוסע
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 overflow-x-auto pb-1.5 no-scrollbar scroll-smooth">
         {passengers.map((passenger) => {
-          // בדיקה האם הטאב הנוכחי הוא הטאב שנבחר כרגע
           const isActive = passenger.id === activePassengerId;
 
           return (
-            <TouchableOpacity
+            <button
               key={passenger.id}
-              onPress={() => onPassengerSelect(passenger.id)}
-              style={[
-                styles.tabButton,
-                isActive ? styles.activeTabButton : styles.inactiveTabButton
-              ]}
-              activeOpacity={0.7} // אפקט עמעום קל בעת לחיצה
+              onClick={() => onPassengerSelect(passenger.id)}
+              className={`flex-1 min-w-[120px] py-3 px-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-semibold transition-all duration-200 cursor-pointer shadow-sm ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-blue-500/25 ring-2 ring-blue-600 scale-[1.02]'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+              }`}
             >
-              <Text
-                style={[
-                  styles.tabText,
-                  isActive ? styles.activeTabText : styles.inactiveTabText
-                ]}
-              >
-                {passenger.shortName}
-              </Text>
-
-              {/* סמן ויזואלי קטן לנוסע הראשי (אופציונלי) */}
-              {passenger.isPrimaryUser && (
-                <View style={styles.primaryIndicator} />
-              )}
-            </TouchableOpacity>
+              <div className="flex flex-col items-start text-right">
+                <div className="flex items-center gap-1.5">
+                  <span>{passenger.shortName}</span>
+                  {passenger.isPrimaryUser && (
+                    <span
+                      title="נוסע ראשי"
+                      className={`w-2 h-2 rounded-full ${
+                        isActive ? 'bg-emerald-300' : 'bg-emerald-500'
+                      }`}
+                    />
+                  )}
+                </div>
+                {passenger.currentSeatNumber && (
+                  <span
+                    className={`text-[11px] font-mono font-medium ${
+                      isActive ? 'text-blue-100' : 'text-gray-400'
+                    }`}
+                  >
+                    מושב {passenger.currentSeatNumber}
+                  </span>
+                )}
+              </div>
+            </button>
           );
         })}
-      </ScrollView>
-    </View>
+      </div>
+    </div>
   );
 };
-
-// =========================================================================
-// עיצוב הרכיב (Styles) - כפתורים עגולים, גדולים ונוחים ללחיצה ביד אחת
-// =========================================================================
-
-const styles = StyleSheet.create({
-  container: {
-    height: 60,
-    width: '100%',
-    marginVertical: 10,
-    justifyContent: 'center',
-  },
-  scrollContainer: {
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    gap: 12, // מרווח בין הטאבים (דורש React Native מעודכן, אחרת משתמשים ב-marginRight)
-  },
-  tabButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 30, // כפתור בצורת "גלולה"
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    // צל קל לכפתורים
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  activeTabButton: {
-    backgroundColor: '#007AFF', // כחול בולט לטאב הפעיל
-  },
-  inactiveTabButton: {
-    backgroundColor: '#FFFFFF', // לבן לטאבים שלא נבחרו
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  tabText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  activeTabText: {
-    color: '#FFFFFF',
-  },
-  inactiveTabText: {
-    color: '#555555',
-  },
-  primaryIndicator: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#4CD964', // נקודה ירוקה
-    marginLeft: 6,
-  }
-});

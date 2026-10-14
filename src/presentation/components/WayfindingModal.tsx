@@ -1,20 +1,18 @@
 /**
  * @file WayfindingModal.tsx
  * @description
- * רכיב התמצאות ביעד וניווט (Wayfinding & Navigation).
+ * רכיב התמצאות ביעד וניווט (Wayfinding & Navigation) עבור Web.
  * מופיע לאחר הנחיתה (LANDED_AT_DESTINATION) ומציע עזרה בהגעה למלון או חברת השכרת רכב.
- * מציג חלון קופץ (Modal) עם אפשרות לשגר את גוגל מפות היישר ליעד, בהתבסס
- * על נתונים שחולצו ממסמכים שאותרו קודם לכן במכשיר.
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, SafeAreaView } from 'react-native';
 import { NavigationService } from '../../services/external/NavigationService';
 import { TravelPhase } from '../../core/types/ContextState';
+import { MapPin, Navigation, X, Building2, Car, Train, ExternalLink } from 'lucide-react';
 
-interface WayfindingTarget {
-  name: string;             // למשל: "Avis Car Rental" או "Rome Marriott Hotel"
-  address?: string;         // כתובת שחולצה מהשובר
+export interface WayfindingTarget {
+  name: string;
+  address?: string;
   latitude?: number;
   longitude?: number;
   type: 'hotel' | 'car_rental' | 'train';
@@ -22,173 +20,116 @@ interface WayfindingTarget {
 
 interface WayfindingModalProps {
   currentPhase: TravelPhase;
-  target?: WayfindingTarget; // היעד שאליו רוצים לנווט
+  target?: WayfindingTarget;
+  forceShowButton?: boolean;
 }
 
-export const WayfindingModal: React.FC<WayfindingModalProps> = ({ currentPhase, target }) => {
+export const WayfindingModal: React.FC<WayfindingModalProps> = ({
+  currentPhase,
+  target = {
+    type: 'hotel',
+    name: 'Rome Marriott Hotel',
+    address: 'Via Veneto 125, Rome, Italy',
+    latitude: 41.9069,
+    longitude: 12.4916,
+  },
+  forceShowButton = false,
+}) => {
   const [isModalVisible, setModalVisible] = useState(false);
 
-  // הרכיב יהיה זמין ויוצג רק כאשר אנחנו אחרי נחיתה או בסיום הטיול, ויש לנו יעד שאפשר לנווט אליו
-  const isEligibleToShow = (currentPhase === 'LANDED_AT_DESTINATION' || currentPhase === 'POST_TRIP') && !!target;
+  const isEligibleToShow =
+    forceShowButton || currentPhase === 'LANDED_AT_DESTINATION' || currentPhase === 'POST_TRIP';
 
   if (!isEligibleToShow || !target) {
     return null;
   }
 
-  /**
-   * פונקציה המפעילה את שירות הניווט החיצוני שלנו
-   */
   const handleNavigatePress = async () => {
     if (target.latitude && target.longitude) {
       await NavigationService.navigateToCoordinates(target.latitude, target.longitude, target.name);
     } else if (target.address) {
       await NavigationService.navigateToAddress(target.address);
     }
-    // סגירת המודאל לאחר הפעלת הניווט
-    setModalVisible(false);
+  };
+
+  const getTargetIcon = () => {
+    switch (target.type) {
+      case 'car_rental':
+        return <Car className="w-6 h-6 text-amber-600" />;
+      case 'train':
+        return <Train className="w-6 h-6 text-purple-600" />;
+      case 'hotel':
+      default:
+        return <Building2 className="w-6 h-6 text-blue-600" />;
+    }
   };
 
   return (
-    <>
-      {/*
-        כפתור הגישה הראשי - יופיע במסך לאחר הנחיתה.
-        צבעים בולטים כדי לתפוס את תשומת הלב של משתמש מבולבל.
-      */}
-      <TouchableOpacity
-        style={styles.triggerButton}
-        activeOpacity={0.8}
-        onPress={() => setModalVisible(true)}
+    <div className="w-full max-w-md mx-auto my-3 text-center">
+      {/* כפתור הגישה הראשי */}
+      <button
+        onClick={() => setModalVisible(true)}
+        className="w-full py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-base shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
       >
-        <Text style={styles.triggerButtonText}>איך להגיע ליעד שלך?</Text>
-      </TouchableOpacity>
+        <Navigation className="w-5 h-5 animate-pulse" />
+        <span>איך להגיע ליעד שלך? (ניווט והתמצאות)</span>
+      </button>
 
-      {/* החלון הקופץ עצמו שמפרט לאן הולכים */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isModalVisible}
-        onRequestClose={() => setModalVisible(false)} // תמיכה בכפתור החזרה של אנדרואיד
-      >
-        <SafeAreaView style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+      {/* חלון המודאל */}
+      {isModalVisible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 text-right shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <MapPin className="w-5 h-5" />
+                </span>
+                <h3 className="text-xl font-bold text-gray-900">ניווט והתמצאות ביעד</h3>
+              </div>
+              <button
+                onClick={() => setModalVisible(false)}
+                className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            <View style={styles.headerRow}>
-              <Text style={styles.modalTitle}>ניווט ביעד</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
+            <div className="my-5 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-white rounded-xl shadow-xs border border-gray-100 mt-0.5">
+                  {getTargetIcon()}
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
+                    היעד הבא שלך
+                  </span>
+                  <h4 className="text-lg font-bold text-gray-900 mt-0.5">{target.name}</h4>
+                  {target.address && (
+                    <p className="text-sm text-gray-600 mt-1 leading-relaxed">{target.address}</p>
+                  )}
+                </div>
+              </div>
+            </div>
 
-            <View style={styles.infoContainer}>
-              <Text style={styles.subTitle}>היעד הבא שלך:</Text>
-              <Text style={styles.targetName}>{target.name}</Text>
-              {target.address && (
-                <Text style={styles.targetAddress}>{target.address}</Text>
-              )}
-            </View>
+            <div className="space-y-3">
+              <button
+                onClick={handleNavigatePress}
+                className="w-full py-4 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-base shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ExternalLink className="w-5 h-5" />
+                <span>הפעל ניווט עכשיו (Google Maps)</span>
+              </button>
 
-            <TouchableOpacity
-              style={styles.navigateButton}
-              activeOpacity={0.8}
-              onPress={handleNavigatePress}
-            >
-              <Text style={styles.navigateButtonText}>הפעל ניווט עכשיו (Google Maps)</Text>
-            </TouchableOpacity>
-
-          </View>
-        </SafeAreaView>
-      </Modal>
-    </>
+              <button
+                onClick={() => setModalVisible(false)}
+                className="w-full py-2.5 px-4 rounded-xl text-gray-500 hover:text-gray-800 text-sm font-medium transition-colors cursor-pointer"
+              >
+                סגור
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
-
-// =========================================================================
-// עיצוב הרכיב (Styles)
-// =========================================================================
-
-const styles = StyleSheet.create({
-  // עיצוב כפתור ההפעלה הראשי
-  triggerButton: {
-    backgroundColor: '#34C759', // צבע ירוק המעודד פעולה
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 25,
-    alignSelf: 'center',
-    marginTop: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 4,
-  },
-  triggerButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-
-  // עיצוב חלון המודאל (Modal)
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', // רקע חצי שקוף
-    justifyContent: 'flex-end',            // החלון יופיע מתחתית המסך
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 25,
-    minHeight: 250,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333333',
-  },
-  closeButton: {
-    padding: 5,
-  },
-  closeButtonText: {
-    fontSize: 24,
-    color: '#888888',
-  },
-  infoContainer: {
-    backgroundColor: '#F9F9F9',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 25,
-  },
-  subTitle: {
-    fontSize: 14,
-    color: '#777777',
-    marginBottom: 5,
-  },
-  targetName: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111111',
-    marginBottom: 8,
-  },
-  targetAddress: {
-    fontSize: 15,
-    color: '#555555',
-    lineHeight: 22,
-  },
-  navigateButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 18,
-    borderRadius: 15,
-    alignItems: 'center',
-  },
-  navigateButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  }
-});

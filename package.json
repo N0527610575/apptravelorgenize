@@ -1,36 +1,27 @@
 {
   "name": "smart-travel-companion",
   "version": "1.0.0",
-  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web",
-    "ts:check": "tsc --noEmit",
-    "prebuild": "expo prebuild",
-    "prebuild:clean": "expo prebuild --clean",
-    "build:apk:debug": "cd android && ./gradlew assembleDebug --no-daemon",
-    "build:apk:release": "cd android && ./gradlew assembleRelease --no-daemon",
-    "build:apk": "npm run build:apk:release"
+    "dev": "vite --host 0.0.0.0 --port 3000",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "expo": "~51.0.0",
-    "expo-status-bar": "~1.12.1",
-    "expo-sensors": "~13.0.9",
-    "expo-location": "~17.0.1",
-    "expo-file-system": "~17.0.1",
-    "expo-document-picker": "~12.0.2",
-    "expo-sqlite": "~14.0.6",
-    "react": "18.2.0",
-    "react-native": "0.74.5",
-    "react-native-svg": "15.2.0",
-    "react-native-qrcode-svg": "^6.3.12"
+    "lucide-react": "^0.344.0",
+    "qrcode.react": "^3.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0",
-    "@types/react": "~18.2.45",
-    "typescript": "~5.3.3"
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.19",
+    "@vitejs/plugin-react": "^4.2.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.2.0"
   },
   "private": true
 }

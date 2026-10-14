@@ -1,178 +1,344 @@
 /**
  * @file MainCompanionScreen.tsx
  * @description
- * המסך הראשי של האפליקציה (The Main Hub).
- * מסך זה מאגד את כל רכיבי התצוגה (Hero Card, Tabs, Modal) ומזרים אליהם
- * את הנתונים בזמן אמת מתוך מכונת המצבים המרכזית (Context State Machine).
- * הוא תוכנן להיות נקי, ברור, וממוקד רק במידע הרלוונטי לשנייה זו.
+ * המסך הראשי של האפליקציה (Web Hub).
+ * מאגד את כרטיס הגיבור (Hero Card), מעבר בין נוסעים (Passenger Tabs),
+ * התמצאות ביעד (Wayfinding Modal), כספת מסמכים וסימולטור החיישנים.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, View, Text, SafeAreaView, StatusBar, Animated } from 'react-native';
-
-// ייבוא הרכיבים שבנינו קודם
+import React, { useState, useMemo } from 'react';
 import { HeroDisplayCard } from '../components/HeroDisplayCard';
 import { PassengerTabBar } from '../components/PassengerTabBar';
-import { WayfindingModal } from '../components/WayfindingModal';
-
-// ייבוא הטיפוסים
-import { ContextState } from '../../core/types/ContextState';
-import { Trip } from '../../core/types/Trip';
-import { TravelDocument } from '../../core/types/Document';
-
-/**
- * הערה: במערכת אמיתית נייבא כאן Hook גלובלי (כמו Redux או Context API)
- * שמספק את המידע החי מהחיישנים ומהדאטה-בייס. לצורך ההדגמה, נגדיר את המבנה.
- */
+import { WayfindingModal, WayfindingTarget } from '../components/WayfindingModal';
+import { FlightStatusBanner } from '../components/FlightStatusBanner';
+import { ContextSimulator } from '../components/ContextSimulator';
+import { DocumentVaultModal } from '../components/DocumentVaultModal';
 import { useTravelContext } from '../state/TripContext';
+import { TravelDocument, DocumentCategory } from '../../core/types/Document';
+import {
+  Plane,
+  FolderLock,
+  Sparkles,
+  ShieldCheck,
+  Bell,
+  Search,
+  CheckCircle2,
+  X,
+  Plus
+} from 'lucide-react';
 
 export const MainCompanionScreen: React.FC = () => {
-  // === חיבור למצב הגלובלי מתוך ה-Context ===
-  const { contextState, activeTrip, setActivePassenger } = useTravelContext();
+  const {
+    contextState,
+    activeTrip,
+    documents,
+    setActivePassenger,
+    updatePhase,
+    addDocument,
+    deleteDocument,
+    scanFilesNow,
+    simulateSensors,
+    toggleBarcodeView,
+    addNewPassenger,
+    resetSimulation,
+  } = useTravelContext();
 
-  // אנימציה עדינה להופעת הודעת ה-Toast העליונה
-  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const [isVaultOpen, setIsVaultOpen] = useState(false);
+  const [isAddPassengerOpen, setIsAddPassengerOpen] = useState(false);
+  const [newPassName, setNewPassName] = useState('');
+  const [newPassShort, setNewPassShort] = useState('');
+  const [newPassSeat, setNewPassSeat] = useState('');
 
-  useEffect(() => {
-    if (contextState.toastMessage) {
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [contextState.toastMessage]);
-
+  // Finding current passenger
   const currentPassenger = useMemo(() => {
-    return activeTrip?.passengers.find(p => p.id === contextState.activePassengerId) || activeTrip?.passengers[0];
+    return (
+      activeTrip?.passengers.find((p) => p.id === contextState.activePassengerId) ||
+      activeTrip?.passengers[0]
+    );
   }, [activeTrip?.passengers, contextState.activePassengerId]);
 
+  // Finding current active document for this passenger or trip
   const activeDocument = useMemo<TravelDocument | null>(() => {
     if (!currentPassenger) return null;
+
+    // Search in loaded documents for a boarding pass for this passenger
+    const match = documents.find(
+      (d) => d.category === 'flight' && d.passengerId === currentPassenger.id
+    );
+
+    if (match) return match;
+
+    // Fallback document
     return {
       id: `doc_${currentPassenger.id}`,
       tripId: activeTrip?.id || 'trip_rome',
       passengerId: currentPassenger.id,
       title: `כרטיס עלייה למטוס - ${currentPassenger.shortName}`,
       category: 'flight',
-      localFilePath: 'file://...',
+      localFilePath: 'boarding_pass.pdf',
       mimeType: 'application/pdf',
       barcode: {
         format: 'PDF417',
-        rawData: `M1${currentPassenger.fullName.toUpperCase().replace(/\s+/g, '/')}/E...`,
+        rawData: `M1${currentPassenger.fullName.toUpperCase().replace(/\s+/g, '/')}/EABC123 TLVFCOLY 0385 288Y0${currentPassenger.currentSeatNumber || '27E'}0048 100`,
         passengerName: currentPassenger.fullName,
-        seatNumber: currentPassenger.currentSeatNumber,
+        seatNumber: currentPassenger.currentSeatNumber || '27E',
+        flightNumber: 'LY385',
       },
       trigger: { type: 'flight_phase', isActive: true },
       isArchived: false,
       createdAt: new Date().toISOString(),
-      source: 'auto_file_scan'
+      source: 'auto_file_scan',
     };
-  }, [currentPassenger, activeTrip?.id]);
+  }, [currentPassenger, documents, activeTrip?.id]);
 
-  const hotelTarget = useMemo(() => ({
-    type: 'hotel' as const,
-    name: 'Rome Marriott Hotel',
-    address: 'Via Veneto 125, Rome, Italy',
-  }), []);
+  const hotelTarget: WayfindingTarget = useMemo(
+    () => ({
+      type: 'hotel',
+      name: 'Rome Marriott Hotel',
+      address: 'Via Veneto 125, Rome, Italy',
+      latitude: 41.9069,
+      longitude: 12.4916,
+    }),
+    []
+  );
 
-  // === מטפל באירועים ===
-  const handlePassengerChange = (passengerId: string) => {
-    setActivePassenger(passengerId);
+  const handleAddPassengerSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassName.trim()) return;
+    addNewPassenger(
+      newPassName.trim(),
+      newPassShort.trim() || newPassName.trim().split(' ')[0],
+      newPassSeat.trim() || '27G'
+    );
+    setNewPassName('');
+    setNewPassShort('');
+    setNewPassSeat('');
+    setIsAddPassengerOpen(false);
   };
 
-  // === רינדור המסך ===
+  const handleManualUpload = (title: string, category: DocumentCategory, text: string) => {
+    const docId = `doc_${Date.now()}`;
+    const newDoc: TravelDocument = {
+      id: docId,
+      tripId: activeTrip?.id || 'trip_rome',
+      title,
+      category,
+      localFilePath: `upload_${docId}.pdf`,
+      mimeType: 'application/pdf',
+      trigger: { type: 'time', isActive: true },
+      isArchived: false,
+      createdAt: new Date().toISOString(),
+      source: 'manual_upload',
+      extractedText: text,
+      barcode:
+        category === 'flight'
+          ? {
+              format: 'QR_CODE',
+              rawData: `FLIGHT-TICKET-${docId}`,
+              flightNumber: 'LY385',
+              seatNumber: '28A',
+            }
+          : undefined,
+    };
+    addDocument(newDoc);
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F2F2F7" />
+    <div className="min-h-screen bg-[#F2F2F7] text-gray-900 pb-16 font-sans">
+      {/* Top Application Bar */}
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-200/80 shadow-xs">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+              <Plane className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-extrabold text-base text-gray-900 leading-tight">
+                  {activeTrip?.title || 'Smart Travel Companion'}
+                </h1>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                  LY385
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                כספת מוצפנת מקומית • On-Device
+              </p>
+            </div>
+          </div>
 
-      <View style={styles.mainContainer}>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsVaultOpen(true)}
+              className="py-2 px-3.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <FolderLock className="w-4 h-4 text-blue-600" />
+              <span>כספת מסמכים</span>
+              {documents.length > 0 && (
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] flex items-center justify-center font-bold">
+                  {documents.length}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      </header>
 
-        {/* אזור 1: בועת התראות מערכת / Toast (למשל: "הכן דרכון") */}
-        <Animated.View style={[styles.toastContainer, { opacity: fadeAnim }]}>
-          {contextState.toastMessage && (
-            <Text style={styles.toastText}>{contextState.toastMessage}</Text>
-          )}
-        </Animated.View>
+      {/* Main Container */}
+      <main className="max-w-3xl mx-auto px-4 pt-4">
+        {/* Toast / Contextual Banner */}
+        {contextState.toastMessage && (
+          <div className="w-full max-w-md mx-auto mb-4 animate-in slide-in-from-top-2 fade-in duration-300">
+            <div className="bg-gray-900 text-white text-xs sm:text-sm font-semibold py-3 px-4 rounded-2xl shadow-lg flex items-center justify-between gap-3 border border-gray-800">
+              <div className="flex items-center gap-2.5">
+                <span className="p-1.5 rounded-xl bg-blue-500/20 text-blue-400">
+                  <Bell className="w-4 h-4" />
+                </span>
+                <span>{contextState.toastMessage}</span>
+              </div>
+              <span className="text-[10px] text-gray-400 font-mono bg-white/10 px-2 py-0.5 rounded-full">
+                {contextState.currentPhase}
+              </span>
+            </div>
+          </div>
+        )}
 
-        <View style={styles.contentWrapper}>
+        {/* Live Flight Status */}
+        <FlightStatusBanner
+          flightNumber={activeTrip?.flights[0]?.flightNumber}
+          departureDate={activeTrip?.anchor.departureDate}
+        />
 
-          {/* אזור 2: ה"גיבור" המרכזי - הברקוד הענק או מספר המושב */}
-          <HeroDisplayCard
-            context={{
-              ...contextState,
-              highlightedSeat: currentPassenger?.currentSeatNumber,
-            }}
-            activeDocument={activeDocument}
+        {/* Hero Card */}
+        <HeroDisplayCard
+          context={{
+            ...contextState,
+            highlightedSeat: currentPassenger?.currentSeatNumber,
+          }}
+          activeDocument={activeDocument}
+          onToggleBarcodeView={toggleBarcodeView}
+        />
+
+        {/* Passenger Tabs */}
+        {activeTrip?.passengers && (
+          <PassengerTabBar
+            passengers={activeTrip.passengers}
+            activePassengerId={contextState.activePassengerId}
+            onPassengerSelect={setActivePassenger}
+            onAddPassenger={() => setIsAddPassengerOpen(true)}
           />
+        )}
 
-          {/* אזור 3: סרגל הנוסעים (יופיע רק אם יש יותר מנוסע אחד) */}
-          {activeTrip?.passengers && (
-            <PassengerTabBar
-              passengers={activeTrip.passengers}
-              activePassengerId={contextState.activePassengerId}
-              onPassengerSelect={handlePassengerChange}
-            />
-          )}
+        {/* Wayfinding Modal Trigger */}
+        <WayfindingModal
+          currentPhase={contextState.currentPhase}
+          target={hotelTarget}
+        />
 
-        </View>
+        {/* Quick Actions (Vault Scan) */}
+        <div className="w-full max-w-md mx-auto my-3 flex items-center justify-between bg-white/70 p-3 rounded-2xl border border-gray-200/60 text-xs">
+          <div className="flex items-center gap-2 text-gray-600">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>סריקה מקומית מאתרת מסמכים מחלון הטיסה</span>
+          </div>
+          <button
+            onClick={scanFilesNow}
+            className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer hover:underline"
+          >
+            <Search className="w-3.5 h-3.5" />
+            סרוק קבצים
+          </button>
+        </div>
 
-        {/* אזור 4: כפתור ניווט קופץ - יופיע רק בנחיתה ביעד */}
-        <View style={styles.bottomArea}>
-          <WayfindingModal
-            currentPhase={contextState.currentPhase}
-            target={hotelTarget}
-          />
-        </View>
+        {/* State Machine Simulator */}
+        <ContextSimulator
+          currentPhase={contextState.currentPhase}
+          contextState={contextState}
+          onPhaseChange={updatePhase}
+          onSimulateSensors={simulateSensors}
+          onReset={resetSimulation}
+        />
+      </main>
 
-      </View>
-    </SafeAreaView>
+      {/* Document Vault Modal */}
+      <DocumentVaultModal
+        isOpen={isVaultOpen}
+        onClose={() => setIsVaultOpen(false)}
+        documents={documents}
+        onAddSampleDocs={scanFilesNow}
+        onUploadDoc={handleManualUpload}
+        onDeleteDoc={deleteDocument}
+      />
+
+      {/* Add Passenger Modal */}
+      {isAddPassengerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-right shadow-2xl border border-gray-100">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+              <h3 className="font-bold text-gray-900 text-base">הוספת נוסע לנסיעה</h3>
+              <button
+                onClick={() => setIsAddPassengerOpen(false)}
+                className="p-1 rounded-full text-gray-400 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddPassengerSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="font-semibold text-gray-700 block mb-1">שם מלא באנגלית/עברית</label>
+                <input
+                  type="text"
+                  value={newPassName}
+                  onChange={(e) => setNewPassName(e.target.value)}
+                  placeholder="למשל: דניאל חסון"
+                  required
+                  className="w-full p-2.5 rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-gray-700 block mb-1">שם קצר בטאב</label>
+                <input
+                  type="text"
+                  value={newPassShort}
+                  onChange={(e) => setNewPassShort(e.target.value)}
+                  placeholder="למשל: דניאל"
+                  className="w-full p-2.5 rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-gray-700 block mb-1">מספר מושב מוקצה</label>
+                <input
+                  type="text"
+                  value={newPassSeat}
+                  onChange={(e) => setNewPassSeat(e.target.value)}
+                  placeholder="למשל: 27D"
+                  className="w-full p-2.5 rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddPassengerOpen(false)}
+                  className="py-2 px-3 rounded-xl text-gray-600 hover:bg-gray-100"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="submit"
+                  className="py-2 px-4 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-xs"
+                >
+                  הוסף נוסע
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
-
-// =========================================================================
-// עיצוב המסך (Styles) - סביבה נקייה, מינימליסטית, רקע אפור בהיר להבלטת הכרטיסים
-// =========================================================================
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F2F2F7', // אפור בהיר בסגנון iOS לשמירה על נראות נקייה
-  },
-  mainContainer: {
-    flex: 1,
-    justifyContent: 'space-between', // מפזר את התוכן על פני המסך (למעלה, אמצע, למטה)
-  },
-  toastContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    minHeight: 50, // שומר על המקום כדי שהמסך לא "יקפוץ" כשההודעה מופיעה
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toastText: {
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    color: '#FFFFFF',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-    overflow: 'hidden',
-  },
-  contentWrapper: {
-    flex: 1,
-    justifyContent: 'center', // ממכז את הכרטיס והטאבים בדיוק באמצע המסך
-  },
-  bottomArea: {
-    paddingBottom: 20,
-    minHeight: 80, // שומר מקום לכפתור הניווט (Wayfinding) שאולי יצוץ בנחיתה
-  }
-});
